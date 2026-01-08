@@ -1,66 +1,47 @@
 """
-Định nghĩa giao thức truyền dữ liệu giữa Client và Server
+Protocol hop dong giao thuc Client - Server
 """
 
-# Status codes
 STATUS_OK = "200"
 STATUS_NOT_FOUND = "404"
-STATUS_SERVER_ERROR = "500"
 
-# Commands
 CMD_DOWNLOAD = "DOWNLOAD"
 CMD_FILE = "FILE"
-CMD_END_FILE = "END_FILE"
 CMD_ERROR = "ERROR"
 
-# Buffer size
+SEPARATOR = "|"
 BUFFER_SIZE = 4096
 
-# Separators
-SEPARATOR = "|"
-FILE_LIST_SEPARATOR = ","
 
 class Protocol:
-    """Xử lý giao thức truyền dữ liệu"""
 
+    # -------- CLIENT -> SERVER --------
     @staticmethod
-    def create_download_request(file_list):
-        """
-        Tạo yêu cầu download
-        Format: DOWNLOAD|file1.txt,file2.pdf
-        """
-        files = FILE_LIST_SEPARATOR.join(file_list)
-        return f"{CMD_DOWNLOAD}{SEPARATOR}{files}"
+    def create_download_request(filename):
+        # DOWNLOAD|filename
+        return f"{CMD_DOWNLOAD}{SEPARATOR}{filename}"
 
     @staticmethod
     def parse_download_request(message):
-        """
-        Phân tích yêu cầu download
-        Returns: list of filenames
-        """
-        try:
-            parts = message.split(SEPARATOR)
-            if parts[0] != CMD_DOWNLOAD:
-                return None
-            files = parts[1].split(FILE_LIST_SEPARATOR)
-            return [f.strip() for f in files if f.strip()]
-        except:
+        parts = message.split(SEPARATOR)
+        if len(parts) != 2 or parts[0] != CMD_DOWNLOAD:
             return None
+        return parts[1]
+
+
+    # -------- SERVER -> CLIENT --------
+    @staticmethod
+    def create_file_header(filename, filesize):
+        # FILE|filename|SIZE|filesize|STATUS|200
+        return f"{CMD_FILE}{SEPARATOR}{filename}{SEPARATOR}SIZE{SEPARATOR}{filesize}{SEPARATOR}STATUS{SEPARATOR}{STATUS_OK}"
 
     @staticmethod
-    def create_file_header(filename, filesize, status=STATUS_OK):
-        """
-        Tạo header cho file
-        Format: FILE|filename|SIZE|filesize|STATUS|200
-        """
-        return f"{CMD_FILE}{SEPARATOR}{filename}{SEPARATOR}SIZE{SEPARATOR}{filesize}{SEPARATOR}STATUS{SEPARATOR}{status}"
+    def create_error_message(filename):
+        # ERROR|filename|404
+        return f"{CMD_ERROR}{SEPARATOR}{filename}{SEPARATOR}{STATUS_NOT_FOUND}"
 
     @staticmethod
     def parse_file_header(message):
-        """
-        Phân tích header file
-        Returns: (filename, filesize, status)
-        """
         try:
             parts = message.split(SEPARATOR)
             if parts[0] != CMD_FILE:
@@ -72,47 +53,50 @@ class Protocol:
         except:
             return None, None, None
 
-    @staticmethod
-    def create_error_message(filename, error_msg):
-        """
-        Tạo thông báo lỗi
-        Format: ERROR|filename|error_message
-        """
-        return f"{CMD_ERROR}{SEPARATOR}{filename}{SEPARATOR}{error_msg}"
 
-    @staticmethod
-    def create_end_message():
-        """Tạo thông báo kết thúc file"""
-        return CMD_END_FILE
-
+    # -------- COMMON --------
     @staticmethod
     def encode_message(message):
-        """Mã hóa message thành bytes với độ dài cố định ở đầu"""
-        msg_bytes = message.encode('utf-8')
-        msg_length = len(msg_bytes)
-        # 8 bytes cho độ dài (fixed header)
-        header = msg_length.to_bytes(8, byteorder='big')
-        return header + msg_bytes
+        data = message.encode("utf-8")
+        length = len(data)
+        return length.to_bytes(8, "big") + data
 
     @staticmethod
     def receive_message(sock):
-        """Nhận message có độ dài cố định ở đầu"""
-        # Nhận 8 bytes header
-        header = b''
-        while len(header) < 8:
-            chunk = sock.recv(8 - len(header))
+        header = sock.recv(8)
+        if not header:
+            return None
+        length = int.from_bytes(header, "big")
+
+        data = b''
+        while len(data) < length:
+            chunk = sock.recv(min(BUFFER_SIZE, length - len(data)))
             if not chunk:
                 return None
-            header += chunk
+            data += chunk
 
-        msg_length = int.from_bytes(header, byteorder='big')
+        return data.decode("utf-8")
 
-        # Nhận message
-        message = b''
-        while len(message) < msg_length:
-            chunk = sock.recv(min(msg_length - len(message), BUFFER_SIZE))
-            if not chunk:
-                return None
-            message += chunk
-
-        return message.decode('utf-8')
+#-----------CLIENT NHẬN FILE --------------
+    @staticmethod
+    def receive_file_content(sock, file_handle, filesize):
+        """
+        Hàm nhận dữ liệu file và ghi trực tiếp vào file_handle
+        Trả về: True nếu nhận đủ, False nếu mất kết nối giữa chừng
+        """
+        received = 0
+        try:
+            while received < filesize:
+                # Tính toán lượng byte cần nhận (không quá BUFFER_SIZE)
+                chunk_size = min(BUFFER_SIZE, filesize - received)
+                
+                chunk = sock.recv(chunk_size)
+                if not chunk:
+                    return False # Mất kết nối đột ngột
+                
+                file_handle.write(chunk)
+                received += len(chunk)
+            return True
+        except Exception as e:
+            print(f"Lỗi khi nhận data: {e}")
+            return False
