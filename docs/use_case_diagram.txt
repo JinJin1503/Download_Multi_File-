@@ -1,0 +1,18 @@
+@startuml
+left to right direction
+
+actor User
+
+rectangle "Hệ thống tải file Client–Server" {
+    User -- (Chọn file cần tải)
+    User -- (Gửi yêu cầu tải file)
+    User -- (Tải file từ Server)
+    User -- (Tải nhiều file song song)
+    User -- (Xem tiến trình tải)
+    User -- (Nhận thông báo lỗi)
+
+    (Tải file từ Server) .> (Gửi yêu cầu tải file) : <<include>>
+    (Tải nhiều file song song) .> (Tải file từ Server) : <<include>>
+    (Nhận thông báo lỗi) .> (Tải file từ Server) : <<extend>>
+}
+@enduml

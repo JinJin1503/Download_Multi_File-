@@ -1,0 +1,46 @@
+@startuml
+title Activity Diagram - Client Download Parallel
+
+start
+:Nhập danh sách file cần tải;
+:Tách danh sách file;
+
+fork
+    :Tạo Thread tải File 1;
+    :Kết nối Server;
+    :Gửi DOWNLOAD(File 1);
+    if (Nhận FILE HEADER?) then (200 OK)
+        :Nhận dữ liệu file;
+        :Ghi file xuống ổ đĩa;
+    else (404 ERROR)
+        :Thông báo file không tồn tại;
+    endif
+    :Đóng socket;
+fork again
+    :Tạo Thread tải File 2;
+    :Kết nối Server;
+    :Gửi DOWNLOAD(File 2);
+    if (Nhận FILE HEADER?) then (200 OK)
+        :Nhận dữ liệu file;
+        :Ghi file xuống ổ đĩa;
+    else (404 ERROR)
+        :Thông báo file không tồn tại;
+    endif
+    :Đóng socket;
+fork again
+    :Tạo Thread tải File N;
+    :Kết nối Server;
+    :Gửi DOWNLOAD(File N);
+    if (Nhận FILE HEADER?) then (200 OK)
+        :Nhận dữ liệu file;
+        :Ghi file xuống ổ đĩa;
+    else (404 ERROR)
+        :Thông báo file không tồn tại;
+    endif
+    :Đóng socket;
+end fork
+
+:Đợi tất cả Thread hoàn thành;
+:Hiển thị kết quả tải;
+stop
+@enduml
