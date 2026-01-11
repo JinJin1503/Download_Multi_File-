@@ -1,32 +1,48 @@
 import socket
+from shared.protocol import Protocol
 
-def main():
-    SERVER_IP = "127.0.0.1"   
-    SERVER_PORT = 5000
+SERVER_IP = "127.0.0.1"
+SERVER_PORT = 5000
+
+def client_protocol_test():
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     try:
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print("Client: Da tao socket")
-
         client_socket.connect((SERVER_IP, SERVER_PORT))
-        print("Client: Da ket noi toi Server")
+        print("Đã kết nối server")
 
-        message = "HELLO SERVER"
-        client_socket.sendall(message.encode("utf-8"))
-        print("Client: Da gui ->", message)
+        filename = input("Nhập tên file cần tải: ")
 
-        response = client_socket.recv(1024)
-        if not response:
-            print("Client: Khong nhan duoc phan hoi")
+        request = Protocol.create_download_request(filename)
+        encoded_request = Protocol.encode_message(request)
+
+        client_socket.sendall(encoded_request)
+        print("Đã gửi yêu cầu:", request)
+
+        response = Protocol.receive_message(client_socket)
+
+        if response is None:
+            print("Server không phản hồi")
+            return
+
+        print("Header nhận được:", response)
+
+        if response.startswith("FILE"):
+            fname, fsize, status = Protocol.parse_file_header(response)
+            print(f"Server OK - File: {fname}, Size: {fsize} bytes")
+
+        elif response.startswith("ERROR"):
+            print("Server báo lỗi: File không tồn tại")
+
         else:
-            print("Client: Nhan tu Server ->", response.decode("utf-8"))
+            print("Phản hồi không hợp lệ")
 
     except Exception as e:
-        print("Client: Loi xay ra:", e)
+        print("Lỗi client:", e)
 
     finally:
         client_socket.close()
-        print("Client: Da dong ket noi")
+        print("Đóng kết nối")
 
 if __name__ == "__main__":
-    main()
+    client_protocol_test()
