@@ -8,13 +8,15 @@ SERVER_PORT = 5000
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_DIR = os.path.join(BASE_DIR, "downloads")
-
 os.makedirs(SAVE_DIR, exist_ok=True)
+
+SOCKET_TIMEOUT = 10
 
 def download_file(filename):
     sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(SOCKET_TIMEOUT)
         sock.connect((SERVER_HOST, SERVER_PORT))
         print(f"[{filename}] Da ket noi server")
 
@@ -41,16 +43,27 @@ def download_file(filename):
             return
 
         save_path = os.path.join(SAVE_DIR, name)
-        with open(save_path, "wb") as f:
-            ok = Protocol.receive_file_content(sock, f, filesize)
+
+        try:
+            with open(save_path, "wb") as f:
+                ok = Protocol.receive_file_content(sock, f, filesize)
+        except IOError:
+            print(f"[{filename}] Loi: Khong ghi duoc file")
+            return
 
         if ok:
             print(f"[{filename}] Tai thanh cong")
         else:
             print(f"[{filename}] Tai that bai")
 
+    except socket.timeout:
+        print(f"[{filename}] Loi: Het thoi gian cho server")
+
+    except ConnectionRefusedError:
+        print(f"[{filename}] Loi: Khong ket noi duoc server")
+
     except Exception as e:
-        print(f"[{filename}] Loi:", e)
+        print(f"[{filename}] Loi khong xac dinh:", e)
 
     finally:
         if sock:
