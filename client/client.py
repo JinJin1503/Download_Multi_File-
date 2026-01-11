@@ -2,6 +2,8 @@ import socket
 import os
 import threading
 from shared.protocol import Protocol, BUFFER_SIZE, STATUS_OK
+from download_status import DownloadStatus
+from status_handler import update_status
 
 SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 5000
@@ -15,52 +17,67 @@ SOCKET_TIMEOUT = 10
 def download_file(filename):
     sock = None
     try:
+        update_status(filename, DownloadStatus.CONNECTING)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(SOCKET_TIMEOUT)
         sock.connect((SERVER_HOST, SERVER_PORT))
-        print(f"[{filename}] Da ket noi server")
+        update_status(filename, DownloadStatus.REQUESTING)
 
         request = Protocol.create_download_request(filename)
         sock.sendall(Protocol.encode_message(request))
-        print(f"[{filename}] Da gui yeu cau")
 
         header = Protocol.receive_message(sock)
         if header is None:
-            print(f"[{filename}] Server khong phan hoi")
+            update_status(filename, DownloadStatus.ERROR)
             return
 
         if header.startswith("ERROR"):
-            print(f"[{filename}] File khong ton tai tren server")
+            update_status(filename, DownloadStatus.NOT_FOUND)
             return
 
         name, filesize, status = Protocol.parse_file_header(header)
         if name is None:
-            print(f"[{filename}] Header khong hop le")
+            update_status(filename, DownloadStatus.ERROR)
             return
 
         if status != STATUS_OK:
-            print(f"[{filename}] Loi trang thai:", status)
+            update_status(filename, DownloadStatus.ERROR)
             return
 
         save_path = os.path.join(SAVE_DIR, name)
-
+        received = 0
+        
         try:
             with open(save_path, "wb") as f:
-                ok = Protocol.receive_file_content(sock, f, filesize)
-        except IOError:
-            print(f"[{filename}] Loi: Khong ghi duoc file")
-            return
+                update_status(filename, DownloadStatus.DOWNLOADING, 0)
 
-        if ok:
-            print(f"[{filename}] Tai thanh cong")
-        else:
-            print(f"[{filename}] Tai that bai")
+                last_percent = -1
+
+                while received < filesize:
+                    chunk = sock.recv(min(BUFFER_SIZE, filesize - received))
+                    if not chunk:
+                        update_status(filename, DownloadStatus.ERROR)
+                        return
+
+                    f.write(chunk)
+                    received += len(chunk)
+
+                    if filesize > 0:
+                        percent = int((received / filesize) * 100)
+                        if percent != last_percent:
+                            update_status(filename, DownloadStatus.DOWNLOADING, percent)
+                            last_percent = percent
+
+            update_status(filename, DownloadStatus.SUCCESS, 100)
+
+        except IOError as e:
+            update_status(filename, DownloadStatus.ERROR)
 
     except socket.timeout:
-        print(f"[{filename}] Loi: Het thoi gian cho server")
+        update_status(filename, DownloadStatus.ERROR)
 
     except ConnectionRefusedError:
-        print(f"[{filename}] Loi: Khong ket noi duoc server")
+        update_status(filename, DownloadStatus.ERROR)
 
     except Exception as e:
         print(f"[{filename}] Loi khong xac dinh:", e)
@@ -86,7 +103,7 @@ def main():
     for t in threads:
         t.join()
 
-    print("\nTat ca file da tai xong")
+    print("\nTat ca file da duoc xu ly")
 
 
 if __name__ == "__main__":
