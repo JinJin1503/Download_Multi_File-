@@ -1,31 +1,25 @@
 import socket
 import os
 import sys
-
+import threading
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from shared.protocol import Protocol
 
 SERVER_HOST = '0.0.0.0'
 SERVER_PORT = 5000
+BUFFER_SIZE = 4096
 
 def handle_client_worker(client_socket, client_addr):
-    """
-    Hàm xử lý Giao thức (Phase 2)
-    Nhiệm vụ: Nhận Request -> Phân tích -> Trả về Header hoặc Error
-    """
     try:
-        print(f"[Server] Đang xử lý kết nối từ: {client_addr}")
+        print(f"[Server] Kết nối mới từ: {client_addr}")
 
         raw_message = Protocol.receive_message(client_socket)
+        if raw_message is None: return
 
-        if raw_message is None:
-            print("[Server] Client ngắt kết nối hoặc gửi tin rỗng.")
-            return
 
         filename = Protocol.parse_download_request(raw_message)
-        print(f"[Server] Nhận yêu cầu tải file: '{filename}'")
+        print(f"[Server] Yêu cầu tải: {filename}")
 
         if filename:
 
@@ -34,39 +28,49 @@ def handle_client_worker(client_socket, client_addr):
                 filesize = os.path.getsize(filename)
 
                 header_str = Protocol.create_file_header(filename, filesize)
+                client_socket.sendall(Protocol.encode_message(header_str))
+                print(f"[Server] --> Gửi Header: {header_str}")
 
-                encrypted_header = Protocol.encode_message(header_str)
-                client_socket.sendall(encrypted_header)
+                print(f"[Server] --> Đang stream file ({filesize} bytes)...")
+                sent_bytes = 0
 
-                print(f"[Server] --> Đã tìm thấy. Gửi Header: {header_str}")
+                with open(filename, "rb") as f:
+                    while True:
+
+                        chunk = f.read(BUFFER_SIZE)
+
+                        if not chunk:
+                            break
+
+                        client_socket.sendall(chunk)
+                        sent_bytes += len(chunk)
+
+                print(f"[Server] --> Hoàn tất gửi: {sent_bytes}/{filesize} bytes.")
 
             else:
 
                 error_str = Protocol.create_error_message(filename)
-
-                encrypted_error = Protocol.encode_message(error_str)
-                client_socket.sendall(encrypted_error)
-
-                print(f"[Server] --> Không tìm thấy. Gửi Lỗi: {error_str}")
+                client_socket.sendall(Protocol.encode_message(error_str))
+                print(f"[Server] --> Gửi lỗi 404: {filename}")
         else:
-            print("[Server] Yêu cầu sai format protocol.")
+            print("[Server] Sai protocol.")
 
     except Exception as e:
-        print(f"[Server] Lỗi xử lý: {e}")
+        print(f"[Server] Lỗi: {e}")
     finally:
-
         client_socket.close()
-        print(f"[Server] Đóng kết nối với {client_addr}")
+        print(f"[Server] Đóng kết nối {client_addr}")
+
 
 def main():
-    print("--- SERVER PHASE 2: PROTOCOL HANDSHAKE ---")
+    print("--- SERVER PHASE 3: FILE STREAMING ---")
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     try:
         server_socket.bind((SERVER_HOST, SERVER_PORT))
         server_socket.listen(5)
-        print(f"[*] Đang lắng nghe tại {SERVER_HOST}:{SERVER_PORT}...")
+        print(f"[*] Lắng nghe tại {SERVER_HOST}:{SERVER_PORT}...")
 
         while True:
             client_socket, client_addr = server_socket.accept()
