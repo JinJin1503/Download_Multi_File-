@@ -89,11 +89,11 @@ class Protocol:
             while received < filesize:
                 # Tính toán lượng byte cần nhận (không quá BUFFER_SIZE)
                 chunk_size = min(BUFFER_SIZE, filesize - received)
-                
+
                 chunk = sock.recv(chunk_size)
                 if not chunk:
                     return False # Mất kết nối đột ngột
-                
+
                 file_handle.write(chunk)
                 received += len(chunk)
             return True
