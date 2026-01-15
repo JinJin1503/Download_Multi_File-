@@ -1,6 +1,10 @@
 import socket
 import os
 import threading
+import sys  
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from shared.protocol import Protocol, BUFFER_SIZE, STATUS_OK
 from download_status import DownloadStatus
 from status_handler import update_status
@@ -71,16 +75,16 @@ def download_file(filename):
             update_status(filename, DownloadStatus.SUCCESS, 100)
 
         except IOError as e:
-            update_status(filename, DownloadStatus.ERROR)
+            update_status(filename, DownloadStatus.IO_ERROR)
 
     except socket.timeout:
-        update_status(filename, DownloadStatus.ERROR)
+        update_status(filename, DownloadStatus.TIMEOUT)
 
     except ConnectionRefusedError:
-        update_status(filename, DownloadStatus.ERROR)
+        update_status(filename, DownloadStatus.DISCONNECT)
 
     except Exception as e:
-        print(f"[{filename}] Loi khong xac dinh:", e)
+        update_status(filename, DownloadStatus.ERROR)
 
     finally:
         if sock:
