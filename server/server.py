@@ -27,7 +27,19 @@ def handle_client_worker(client_socket, client_addr):
 
         filename = Protocol.parse_download_request(raw_message)
         print(f"[Thread-{thread_id}] Yêu cầu tải: {filename}")
-
+        # 1. Nếu là yêu cầu lấy danh sách (LIST)
+        if raw_message == "LIST":
+            print(f"[Thread-{thread_id}] Yêu cầu lấy danh sách file")
+            try:
+                # Lấy tất cả file trong thư mục, bỏ qua file ẩn
+                files = [f for f in os.listdir(FILE_DIR) if os.path.isfile(os.path.join(FILE_DIR, f)) and not f.startswith('.')]
+                response = Protocol.create_list_response(files)
+                client_socket.sendall(Protocol.encode_message(response))
+                print(f"[Thread-{thread_id}] Đã gửi danh sách: {len(files)} files")
+            except Exception as e:
+                print(f"[Thread-{thread_id}] Lỗi lấy danh sách: {e}")
+            return # Xử lý xong thì thoát thread này (Client sẽ kết nối lại để tải sau)
+        
         if filename:
             safe_filename = os.path.basename(filename) 
             file_path = os.path.join(FILE_DIR, safe_filename)

@@ -8,6 +8,8 @@ STATUS_NOT_FOUND = "404"
 CMD_DOWNLOAD = "DOWNLOAD"
 CMD_FILE = "FILE"
 CMD_ERROR = "ERROR"
+CMD_LIST = "LIST"            
+CMD_LIST_DATA = "LIST_DATA"  
 
 SEPARATOR = "|"
 BUFFER_SIZE = 4096
@@ -100,3 +102,28 @@ class Protocol:
         except Exception as e:
             print(f"Lỗi khi nhận data: {e}")
             return False
+
+# --- THÊM MỚI: Request lấy danh sách file ---
+    @staticmethod
+    def create_list_request():
+        return CMD_LIST
+
+    # --- THÊM MỚI: Server đóng gói danh sách file gửi về ---
+    @staticmethod
+    def create_list_response(files_list):
+        # files_list là list các tên file, ví dụ: ["a.txt", "b.jpg"]
+        # Gửi về dạng: LIST_DATA|a.txt,b.jpg
+        files_str = ",".join(files_list)
+        return f"{CMD_LIST_DATA}{SEPARATOR}{files_str}"
+
+    @staticmethod
+    def parse_list_response(message):
+        # Tách header lấy danh sách
+        parts = message.split(SEPARATOR)
+        if len(parts) < 2 or parts[0] != CMD_LIST_DATA:
+            return []
+        
+        content = parts[1]
+        if not content:
+            return []
+        return content.split(",")

@@ -90,6 +90,28 @@ def download_file(filename):
         if sock:
             sock.close()
 
+def get_server_file_list():
+    """Hàm kết nối server chỉ để lấy danh sách file"""
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5) 
+        sock.connect((SERVER_HOST, SERVER_PORT))
+        
+        # Gửi lệnh LIST
+        req = Protocol.create_list_request()
+        sock.sendall(Protocol.encode_message(req))
+        
+        # Nhận phản hồi
+        msg = Protocol.receive_message(sock)
+        if msg:
+            return Protocol.parse_list_response(msg)
+        return []
+    except Exception as e:
+        print("Lỗi lấy danh sách file:", e)
+        return []
+    finally:
+        if sock: sock.close()
 
 def main():
     print("Nhap danh sach file can tai (cach nhau boi dau phay)")
