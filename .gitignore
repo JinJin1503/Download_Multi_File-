@@ -1,0 +1,8 @@
+# Bỏ qua tất cả mọi thứ
+*
+
+# Ngoại trừ (dấu chấm than) thư mục bạn muốn giữ
+!client/
+
+# Cần dòng này để Git không bỏ qua nội dung bên trong thư mục đó
+!client/*
