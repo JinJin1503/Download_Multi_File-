@@ -2,6 +2,7 @@ import socket
 import os
 import sys
 import threading
+import hashlib
 from shared.protocol import Protocol
 
 SERVER_HOST = '0.0.0.0'
@@ -13,6 +14,17 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE_DIR = os.path.join(BASE_DIR, "files")
 os.makedirs(FILE_DIR, exist_ok=True)
 
+# --- 2. Thêm hàm tính checksum ---
+def calculate_md5(file_path):
+    hash_md5 = hashlib.md5()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest() # Trả về chuỗi 32 ký tự
+    except:
+        return "0" * 32
+    
 def handle_client_worker(client_socket, client_addr):
     thread_id = threading.get_ident()
     try:
@@ -62,7 +74,9 @@ def handle_client_worker(client_socket, client_addr):
                         except (ConnectionResetError, BrokenPipeError):
                             print(f"[Thread-{thread_id}] ⚠️ Client ngắt kết nối giữa chừng!")
                             return
-
+                checksum = calculate_md5(file_path)
+                client_socket.sendall(checksum.encode('utf-8'))
+                print(f"[Thread-{thread_id}] --> Đã gửi kèm Checksum: {checksum}")
                 print(f"[Thread-{thread_id}] --> Hoàn tất gửi: {sent_bytes}/{filesize} bytes")
             else:
 

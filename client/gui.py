@@ -91,6 +91,14 @@ class FileRow:
             self.btn_action.config(state="normal", text="Open File", bg=COLOR_GREEN, fg="white")
             self.progress["value"] = 100
             
+        elif status_code == DownloadStatus.VERIFYING:
+            self.lbl_status.config(text="Verifying...", fg="#fd7e14") # Màu cam
+        
+        elif status_code == DownloadStatus.CORRUPTED:
+            self.lbl_status.config(text="File Corrupted", fg=COLOR_RED, font=("Segoe UI", 9, "bold"))
+            self.btn_action.config(state="normal", text="Retry", bg=COLOR_BLUE, fg="white")
+            self.progress["value"] = 0
+            
         elif status_code in [DownloadStatus.ERROR, DownloadStatus.NOT_FOUND, DownloadStatus.IO_ERROR, DownloadStatus.DISCONNECT, DownloadStatus.TIMEOUT]:
             self.lbl_status.config(text=status_code, fg=COLOR_RED)
             self.btn_action.config(state="normal", text="Retry", bg=COLOR_BLUE, fg="white")

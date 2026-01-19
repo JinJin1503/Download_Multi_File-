@@ -8,3 +8,5 @@ class DownloadStatus:
     TIMEOUT     = "TIMEOUT"       # Het thoi gian
     DISCONNECT  = "DISCONNECT"    # Server ngat ket noi
     IO_ERROR    = "IO_ERROR"      # Loi ghi file
+    VERIFYING   = "VERIFYING"     # Đang kiểm tra
+    CORRUPTED   = "CORRUPTED"     # File lỗi

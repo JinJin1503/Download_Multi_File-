@@ -2,6 +2,7 @@ import socket
 import os
 import threading
 import sys  
+import hashlib
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -18,6 +19,16 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 
 SOCKET_TIMEOUT = 10
 
+def calculate_md5(file_path):
+    hash_md5 = hashlib.md5()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+    except:
+        return None
+    
 def download_file(filename):
     sock = None
     try:
@@ -72,7 +83,17 @@ def download_file(filename):
                             update_status(filename, DownloadStatus.DOWNLOADING, percent)
                             last_percent = percent
 
-            update_status(filename, DownloadStatus.SUCCESS, 100)
+            update_status(filename, DownloadStatus.VERIFYING)
+            
+            server_checksum = sock.recv(32).decode('utf-8')
+            
+            local_checksum = calculate_md5(save_path)
+            
+            if local_checksum and local_checksum == server_checksum:
+                update_status(filename, DownloadStatus.SUCCESS, 100)
+            else:
+                print(f"Lỗi checksum: Server={server_checksum} vs Local={local_checksum}")
+                update_status(filename, DownloadStatus.CORRUPTED)
 
         except IOError as e:
             update_status(filename, DownloadStatus.IO_ERROR)
