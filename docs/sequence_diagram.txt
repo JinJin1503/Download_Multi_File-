@@ -1,0 +1,33 @@
+@startuml
+title Download file song song - Sequence Diagram
+
+actor Client
+
+participant "Client Worker Thread" as C
+participant "Server Main" as SM
+participant "Server Worker Thread" as SW
+participant "File System" as FS
+
+Client -> C : nhập danh sách file
+C -> SM : connect()
+SM -> SW : create worker thread
+
+C -> SW : DOWNLOAD(filename)
+
+SW -> FS : check file exists
+
+alt File tồn tại
+    FS --> SW : file info
+    SW -> C : FILE HEADER (size, status=200)
+
+    loop while not EOF
+        SW -> C : file chunk
+    end
+
+else File không tồn tại
+    SW -> C : ERROR (404)
+end
+
+C -> SW : close()
+SW -> C : close()
+@enduml

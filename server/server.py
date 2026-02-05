@@ -2,8 +2,7 @@ import socket
 import os
 import sys
 import threading
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import hashlib
 from shared.protocol import Protocol
 
 SERVER_HOST = '0.0.0.0'
@@ -11,6 +10,21 @@ SERVER_PORT = 5000
 BUFFER_SIZE = 4096
 SOCKET_TIMEOUT = 60
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FILE_DIR = os.path.join(BASE_DIR, "files")
+os.makedirs(FILE_DIR, exist_ok=True)
+
+# --- 2. Thêm hàm tính checksum ---
+def calculate_md5(file_path):
+    hash_md5 = hashlib.md5()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest() # Trả về chuỗi 32 ký tự
+    except:
+        return "0" * 32
+    
 def handle_client_worker(client_socket, client_addr):
     thread_id = threading.get_ident()
     try:
@@ -25,16 +39,30 @@ def handle_client_worker(client_socket, client_addr):
 
         filename = Protocol.parse_download_request(raw_message)
         print(f"[Thread-{thread_id}] Yêu cầu tải: {filename}")
-
+        # 1. Nếu là yêu cầu lấy danh sách (LIST)
+        if raw_message == "LIST":
+            print(f"[Thread-{thread_id}] Yêu cầu lấy danh sách file")
+            try:
+                # Lấy tất cả file trong thư mục, bỏ qua file ẩn
+                files = [f for f in os.listdir(FILE_DIR) if os.path.isfile(os.path.join(FILE_DIR, f)) and not f.startswith('.')]
+                response = Protocol.create_list_response(files)
+                client_socket.sendall(Protocol.encode_message(response))
+                print(f"[Thread-{thread_id}] Đã gửi danh sách: {len(files)} files")
+            except Exception as e:
+                print(f"[Thread-{thread_id}] Lỗi lấy danh sách: {e}")
+            return # Xử lý xong thì thoát thread này (Client sẽ kết nối lại để tải sau)
+        
         if filename:
-            if os.path.exists(filename) and os.path.isfile(filename):
-                filesize = os.path.getsize(filename)
+            safe_filename = os.path.basename(filename) 
+            file_path = os.path.join(FILE_DIR, safe_filename)
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                filesize = os.path.getsize(file_path)
 
-                header_str = Protocol.create_file_header(filename, filesize)
+                header_str = Protocol.create_file_header(safe_filename, filesize)
                 client_socket.sendall(Protocol.encode_message(header_str))
 
                 print(f"[Thread-{thread_id}] Đang gửi file...")
-                with open(filename, "rb") as f:
+                with open(file_path, "rb") as f:
                     sent_bytes = 0
                     while True:
                         chunk = f.read(BUFFER_SIZE)
@@ -46,16 +74,20 @@ def handle_client_worker(client_socket, client_addr):
                         except (ConnectionResetError, BrokenPipeError):
                             print(f"[Thread-{thread_id}] ⚠️ Client ngắt kết nối giữa chừng!")
                             return
-
+                checksum = calculate_md5(file_path)
+                client_socket.sendall(checksum.encode('utf-8'))
+                print(f"[Thread-{thread_id}] --> Đã gửi kèm Checksum: {checksum}")
                 print(f"[Thread-{thread_id}] --> Hoàn tất gửi: {sent_bytes}/{filesize} bytes")
             else:
 
-                error_str = Protocol.create_error_message(filename)
+                error_str = Protocol.create_error_message(safe_filename)
                 client_socket.sendall(Protocol.encode_message(error_str))
                 print(f"[Thread-{thread_id}] --> Gửi lỗi 404 (File not found).")
         else:
-            print(f"[Thread-{thread_id}] Yêu cầu sai format.")
-
+            error_str = Protocol.create_error_message("INVALID_REQUEST")
+            client_socket.sendall(Protocol.encode_message(error_str))
+            return
+        
     except socket.timeout:
         print(f"[Thread-{thread_id}] ⚠️ Lỗi Timeout: Client quá lâu không phản hồi.")
     except Exception as e:
